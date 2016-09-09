@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>HotNet2 Subnetworks</title>
+<style>
+	body{
+		font-family:"Helvetica","Arial";
+		padding:10px;
+	}
+	div.container{
+		width:1000px;
+		margin:0px auto;
+		background:"#F6F6F6";
+	}
+	div#instructions{
+		width:450px;
+		float:left;
+	}
+	div#filters{
+		width:450px;
+		float:right;
+	}
+	abbr{
+		font-weight:bold;
+		color:rgb(36,64,144);
+		border:1px solid rgb(36,64,144);
+		cursor:help;
+		font-size:80%;
+		padding:0px 2px 0px 2px;
+		float:right;
+		margin-left:30px;
+	}
+	div#figures{
+		padding:5px;
+		clear:both;
+	}
+	div#figures h3 small#stats{
+		float:right;
+		font-size:80%;
+	}
+	hr{
+		clear:both;
+		padding-bottom:0px;
+		margin:0px;
+		border:0;
+		border-bottom:1px solid #eee;
+	}
+	div#figures hr{
+		clear:both;
+		margin-top:30px;
+		border:0;
+		border-bottom:1px dashed #777777;
+	}
+	div#figures div.network{
+		width:800px;
+		float:left;
+	}
+	div#figures div.m2{
+		width:190px;
+		float:right;
+	}
+</style>
+<body>
+<div class="container">
+	<h1>BioNet Results</h1>
+	<hr/>
+	<div style="border-bottom:1px solid #eee;padding-bottom:10px">
+		<div id="instructions">
+			<h3>Instructions</h3>
+			This page shows the results of a BioNet run. Use parameters to mask the nodes fall below the criteria with opacity.
+		</div>
+		<div id="filters">
+			<h3>Parameters</h3>
+			<table>
+				<tr>
+					<td><label>Minimum edge weight &delta;</label>:</td>
+					<td>
+						<select id="deltas"></select>
+						<abbr title="Select one of the deltas automatically chosen by HotNet2. HotNet2 reports a collection of subnetworks and their significance for each automatically chosen delta.">?</abbr>
+					</td>
+				</tr>
+				<tr>
+					<td><label>Minimum subnetwork size <i>k</i></label>:</td>
+					<td>
+						<input type="range" id="k" min="2" value="2" max="10" step="1" />
+						<span id="k">2</span>
+						<abbr title="Hide subnetworks of size less than k.">?</abbr>
+					</td>
+				</tr>
+			</table>
+		</div>
+		<br style="clear:both"/>
+	</div>
+	<div id="figures">
+		<h3>
+			Subnetworks
+                        <small id="params"></small>
+                        <small id="download">
+                          <a title="Download subnetworks."></a>
+                        </small>
+			<small id="stats">
+				<span id="observed"></span>
+				<span id="expected"></span>
+				<span id="pval"></span>
+			</small>
+		</h3>
+                <br/>
+	</div>
+</div>
+<script src="assets/jssor.slider-21.1.5.min.js"></script>
+<script src="assets/d3.v3.min.js"></script>
+<script>
+var heatFormat = d3.format(".3r");
+
+var tooltip = d3.select("body")
+	.append("div")
+	.style("position", "absolute")
+	.style("z-index", "10")
+	.style("visibility", "hidden")
+	.style("font-size", "16px");
+	
+var highlights = null, vlabels = null, enhnetwork = null;
+
+function hasXStr(d){ return ("name" in d) && (d.name.indexOf("chr") > -1) }
+function hasEnh(d) { return ("enh" in d) && (d.enh.nodes.length > 1) }
+function xSymbol(d){ return hasEnh(d) ? d3.svg.symbolTypes[5] :(hasXStr(d) ? d3.svg.symbolTypes[3] : d3.svg.symbolTypes[0]) }
+function showtooltip(data) {
+	tooltip.html(vlabels[0]+": "+data.pvals[0]+"<br>"+vlabels[1]+": "+data.pvals[1])
+}
+
+function imgslider(d, i, heats, sub){
+	var root = d3.select("#slider_"+i)
+	root.selectAll("*").remove();
+	var n = 0;
+	for (var j=0; j < vlabels.length; j++) {
+	if (!(vlabels[j] in d)) continue;
+	for (var k=0; k < d[vlabels[j]].length; k++) {
+	n++}}
+	if (n!=0) {
+	var tmp = Math.random().toString(36).substr(2, 10)
+	var slider = root.append("div")
+	    .attr("id",tmp)
+	    .attr("style","position: relative; margin: 0 auto; top: 0px; left: 0px; width: 400px; height: 400px; overflow: hidden; visibility: hidden")
+	var divl  = slider.append("div")
+	    .attr("data-u","loading")
+	    .attr("style","position: absolute; top: 0px; left: 0px")
+	divl.append("div")
+	    .attr("style","filter: alpha(opacity=70); opacity: 0.7; position: absolute; display: block; top: 0px; left: 0px; width: 100%; height: 100%")
+	divl.append("div")
+	    .attr("style","position:absolute;display:block;background:url('img/loading.gif') no-repeat center center;top:0px;left:0px;width:100%;height:100%")
+	var divs = slider.append("div")
+	    .attr("data-u","slides")
+	    .attr("style","cursor: default; position: relative; top: 0px; left: 0px; width: 400px; height: 400px; overflow: hidden")
+	for (var j=0; j < vlabels.length; j++) {
+	if (!(vlabels[j] in d)) continue;
+	for (var k=0; k < d[vlabels[j]].length; k++) {
+	divs.append("div")
+	    .attr("data-p","112.50")
+	    .style("display","none")
+	    .append("img")
+	    .attr("data-u","image")
+	    .attr("src",d[vlabels[j]][k])
+	}}
+	var divu = slider.append("div")
+	    .attr("data-u","navigator")
+	    .attr("class","jssorb05")
+	    .attr("style","bottom:16px;right:16px")
+	    .attr("data-autocenter","1")
+	divu.append("div")
+	    .attr("data-u","prototype")
+	    .attr("style","width:16px;height:16px")
+	slider.append("span")
+	    .attr("data-u","arrowleft")
+	    .attr("class","jssora12l")
+	    .attr("style","top:0px;left:0px;width:30px;height:46px")
+	    .attr("data-autocenter","2")
+	slider.append("span")
+	    .attr("data-u","arrowright")
+	    .attr("class","jssora12r")
+	    .attr("style","top:0px;right:0px;width:30px;height:46px")
+	    .attr("data-autocenter","2")
+	new $JssorSlider$(tmp, {
+	  $AutoPlay: true,
+	  $SlideshowOptions: {
+	    $Class: $JssorSlideshowRunner$,
+	    $Transitions: [{$Duration:1200,$Opacity:2}],
+	    $TransitionsOrder: 1
+	  },
+	  $ArrowNavigatorOptions: {
+	    $Class: $JssorArrowNavigator$
+	  },
+	  $BulletNavigatorOptions: {
+	    $Class: $JssorBulletNavigator$
+	  }
+	})}
+	if (!sub && !hasXStr(d)) {
+	  d.enh.heats = heats
+	  enhnetwork = d.enh
+	}
+	root.append("div")
+	    .datum(enhnetwork)
+	    .call(subnetwork({style: {
+		fontColor: '#34495E',
+		heatLegendWidth: 300,
+		netLegendWidth: 90,
+		width: 400,
+		height: 400,
+		nodeRadius: 10,
+		strokeWidth: 4
+	}, ncol: vlabels.length, index: i, sub: true}))
+}
+
+function fillopacity(d, i) {
+    var opa = 1.0;
+    if (highlights[i]) {
+      if (highlights[i] === "no pathway filter") return opa;
+      else if (!("pathway" in d)) opa = opa * 0.1;
+      else {
+        for (var j=0;j<d.pathway.length;j++) {
+          if (highlights[i] === d.pathway[j]) return opa;
+        }
+        opa = opa * 0.1;
+      }
+    }
+    return opa;
+}
+
+var dColor = d3.scale.linear()
+	  .domain([-1, 0, 1])
+	  .range(["#0c0", "#000", "#f30"])
+	  .nice();
+
+function strokecolor(d) {
+    return ("expr" in d) ? dColor(d.expr) : "#000";
+}
+
+// Add the subnetworks
+d3.json('assets/subnetworks.prom.json', function(json) {
+	// Populate the delta select and the ks slider
+	var deltaSelect = d3.select("div#filters select");
+	deltaSelect.selectAll(".delta")
+		.data(json.deltas.sort()).enter()
+		.append("option")
+		.attr("value", function(d){ return d; })
+		.text(function(d){ return d; })
+
+	var kSlider = d3.select("div#filters input")
+		.attr("min", d3.min(json.ks))
+		.attr("max", d3.max(json.ks));
+
+	// Add listeners to the deltaSelect and kSlider
+	deltaSelect.on("change", drawSubnetworks);
+	kSlider.on("change", filterSubnetworks);
+
+	highlights = new Array(json.ks.length);
+	vlabels = json.labels;
+	var delta = json.deltas[0],
+		fig = d3.select("#figures");
+	function drawSubnetworks(){
+		// Retrieve the current delta
+		if (d3.select(this).node().value){
+			delta = d3.select(this).node().value;
+		}
+
+		drawSubnetworksImpl();
+	} // end drawSubnetworks
+
+	function drawSubnetworksImpl(){
+		// Remove the old subnetworks
+		fig.selectAll("div").remove();
+
+		// Create an object that contains any changes to the default styles 
+		var styling = {
+			fontColor: '#34495E',
+			heatLegendWidth: 300,
+			netLegendWidth: 90,
+			width: 800,
+			height: 800,
+			nodeRadius: 10,
+			strokeWidth: 4
+		}
+
+		// Add each subnetwork as an SVG wrapped in a div
+		json.subnetworks[delta].forEach(function(d, i){
+			fig.append("div").html("Gene expression: " + d.expression);
+			var g = fig.append("div").attr("id", "subnetwork"+i)
+						.attr("class", "subnetwork k" + d.nodes.length);
+
+			g.append("div")
+				.datum(d)
+				.attr("id", "network"+i)
+				.attr("class", "network")
+				.call(
+					subnetwork({style: styling, ncol: json.labels.length, index: i})
+						.addNetworkLegend()
+						.addGradientLegend()
+		  		);
+
+			d.pathways.unshift("no pathway filter");
+		  	g.append("div")
+				.attr("class", "m2")
+				.style("margin-bottom", "30px")
+				.call(function(div){
+					var select  = div.append("select").on("change", function(d) {
+					    highlights[i] = select.property("value");
+					    d3.select("#network"+i+" svg").remove();
+					    d3.select("#network"+i+" div").remove();
+					    d3.select("#network"+i).call(
+						  subnetwork({style: styling, ncol: json.labels.length, index: i})
+						   .addNetworkLegend().addGradientLegend())}),
+					    options = select.selectAll('option').data(d.pathways);
+					options.enter().append("option").text(function(d) { return d })
+					    .attr("value",function(d){return d});
+					div.append("div").attr("id", "slider_"+i)
+				})
+		  	g.append("hr");
+		});
+		filterSubnetworks();
+	} // end drawSubnetworksImpl
+
+	var stats = d3.select("div#figures h3 small#stats");
+	function filterSubnetworks(){
+		// Get the current value of k from the slider
+		var k = kSlider.node().value;
+
+		// Update the title to reflect the new subnetworks and significance
+		d3.select("div#figures h3 small#params").html("&delta; = " + delta + ", k = " + k);
+
+		// Update the slider value, and update the signficance
+		d3.select("span#k").text(k);
+		stats.select("span#pval").html("P=" + json.stats[delta][k].pval);
+		stats.select("span#expected").html("Expected: " + json.stats[delta][k].expected);
+		stats.select("span#observed").html("Observed: " + json.stats[delta][k].observed);
+		stats.select("span#expression").html("Expression: " + json.subnetworks[delta][k].expression);
+
+		// Show subnetworks of size at least k, hide the rest
+		d3.selectAll("div.subnetwork").style("display", "inline");
+		d3.range(d3.min(json.ks), k).forEach(function(k){
+			d3.selectAll(".k" + k).style("display", "none");
+		});
+
+		// Show subnetworks of size at least k, hide the rest
+                var filteredSubnets = json.subnetworks[delta].filter(function(d){ return d.nodes.length >= k; })
+                     .map(function(d){ return d.nodes.map(function(n){ return n.name; }).join("\t"); })
+                     .join("\n");
+                d3.select("small#download a")
+                  .attr("download", "subnetworks-d" + delta + "-k" + k + ".txt")
+                  .attr("href", window.URL.createObjectURL(new Blob([filteredSubnets], {type: 'text/plain'})))
+                  .style("font-size", "75%")
+                  .text("Download as text file");
+	}
+
+	function filterSamples(genes, M, samples){
+		var sampleToMutated = {};
+		genes.forEach(function(g){
+			Object.keys(M[g]).forEach(function(s){
+				sampleToMutated[s] = true;
+			});
+		});
+		return Object.keys(sampleToMutated).map(function(s){ return {name: s, _id: s}; });
+	}
+
+	// Draw the subnetworks, starting with the first delta
+	drawSubnetworks();
+
+});
+
+// gd3 subnetwork function
+function subnetwork(params) {
+  var params = params || {},
+	  style  = params.style || {},
+	  colorSchemes = style.colorSchemes || {};
+
+  var cold = style.cold || 'rgb(102, 178, 255)',
+	  edgeWidth = style.edgeWidth || 1.5,
+	  fontColor = style.fontColor || '#333',
+	  fontFamily = style.fontFamily || '"Helvetica","Arial"',
+	  fontSize = style.fontSize || 10,
+	  heatLegendHeight = style.heatLegendHeight || 30,
+	  heatLegendWidth = style.heatLegendWidth ||  100,
+	  height = style.height || 200,
+	  hot = style.hot || 'rgb(255, 51, 51)',
+	  margins = style.margins || {bottom: 0, left: 0, right: 0, top: 0},
+	  netLegendBox = style.netLegendBox || 15,
+	  netLegendWidth = style.netLegendWidth || 200,
+	  nodeRadius = style.nodeRadius || 10,
+	  strokeWidth = style.strokeWidth || 1.5,
+	  transitionTime = style.transitionTime || 500,
+	  width = style.width || 350;
+
+  var showNetworkLegend = false,
+	  showGradientLegend = false;
+
+  function xLen(d){ return hasXStr(d) ? nodeRadius : nodeRadius+strokeWidth }
+  function chart(selection) {
+	selection.each(function(data) {
+	  //////////////////////////////////////////////////////////////////////////
+	  // General setup
+	  var edges = data.edges,
+		  nodes = data.nodes;
+
+	  // Select the svg element, if it exists.
+	  var fig = d3.select(this)
+		  .selectAll('svg')
+		  .data([data])
+		  .enter()
+			.append('svg');
+
+	  fig.attr('id', 'figure')
+		  .attr('height', height + margins.top + margins.bottom)
+		  .attr('width', width)
+		  .style('font-family', fontFamily)
+		  .style('font-size', fontSize);
+
+	  // Create the color scale
+	  var heatRange = data.heats, //nodes.map(function(n){ return n.heat.abs_max(n.heat) * (n.heat.average()>0?1:-1); }),
+		  color = d3.scale.linear()
+			  .domain([d3.min(heatRange), 0, d3.max(heatRange)])
+			  .range([cold, "#fff", hot])
+			  .nice();
+
+	  // Set up the force directed graph
+	  var force = d3.layout.force()
+		  .charge(-400)
+		  .linkDistance(40)
+		  .size([width, height]);
+
+	  // This drag function fixes nodes in place once they are dragged
+	  var drag = force.drag().on('dragstart', function(d) {
+		d.fixed = true;
+		d3.select(this).select('circle').style('stroke-opacity', 0);
+	  });
+
+	  // Set up scales
+	  var x = d3.scale.linear().range([0, width]),
+		  y = d3.scale.linear().range([0, height]);
+
+	  var links = loadLinks(edges, nodes);
+
+	  force.nodes(nodes)
+		  .links(links)
+		  .start();
+
+	  // Determine which networks are in the data
+	  var networks = [];
+	  for (var i = 0; i < links.length; i++) {
+		for (var j = 0; j < links[i].networks.length; j++) {
+		  if (networks.indexOf(links[i].networks[j]) == -1) {
+			networks.push(links[i].networks[j]);
+		  }
+		}
+	  }
+
+	  var numNets = networks.length,
+		  netLegendHeight = numNets * 10;
+
+	  // Make sure each network has a color
+	  if (colorSchemes.network == undefined) {
+		var colors = d3.scale.category20();
+		colorSchemes.network = {};
+		for (var i = 0; i < networks.length; i++) {
+		  colorSchemes.network[networks[i]] = colors(i);
+		}
+	  }
+
+	  // Draw the edges
+	  var link = fig.selectAll('.link')
+		  .data(links);
+
+	  var linkInNetwork = {},
+		  activeNetworks = {};
+
+	  for (var i = 0; i < networks.length; i++) {
+		var net = networks[i],
+			netName = net.split('.').join('');
+			netColor = colorSchemes.network[networks[i]];
+			activeNetworks[net] = true;
+
+		var inNet = fig.selectAll('.' + netName)
+				.data(links.filter(function (link) {
+				  return link.networks && link.networks.indexOf(net) != -1;
+				}))
+				.enter()
+				.append('line')
+				  .classed(netName, true)
+				  .style('stroke-width', edgeWidth)
+				  .style('stroke', netColor);
+
+			linkInNetwork[net] = inNet;
+	  }
+
+	  // Draw the nodes
+	  // Keep the circles and text in the same group for better dragging
+	  var circle = fig.append('svg:g')
+		  .selectAll('node')
+		  .data(nodes)
+		  .enter()
+		  .append('svg:g')
+		  .style('cursor', 'move')
+		  .call(force.drag)
+		  .on('dblclick', function(d) {
+		        d.fixed = d.fixed ? false : true;
+		        d3.select(this).select('circle').style('stroke-opacity', 1);
+		  })
+		  .on('click', function(d) {
+		        imgslider(d, params.index, data.heats, ("sub" in params))
+		  })
+		  .on("mouseover", function(d) {
+		        showtooltip(d);
+		        return tooltip.style("visibility", "visible");
+		  })
+		  .on("mousemove", function(){
+		        return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");
+		  })
+		  .on("mouseout", function(){
+		        return tooltip.style("visibility", "hidden");
+		  });
+
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr('fill', function(d) { return params.ncol>1 ? "#fff": color(d.heat[0]); })
+		  .style('stroke-width', strokeWidth)
+		  .style('opacity', function(d) {return fillopacity(d, params.index);})
+		  .style('stroke', function(d) {return strokecolor(d);});
+
+	  if (params.ncol>2) {
+	  // clipPath nw
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", function(d) { return xLen(d) * (-1)})
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", function(d) { return xLen(d) * (-1)})
+	      .attr("height", function(d) { return xLen(d)});
+
+	  // circle nw
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[1]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+		
+	  // clipPath ne
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", 0)
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", function(d) { return xLen(d) * (-1)})
+	      .attr("height", function(d) { return xLen(d)});
+
+	  // circle ne
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[2]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+		
+	  // clipPath se
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", 0)
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", 0)
+	      .attr("height", function(d) { return xLen(d)});
+
+	  // circle se
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[3]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+
+	  if (params.ncol>3) {	
+	  // clipPath sw
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", function(d) { return xLen(d) * (-1)})
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", 0)
+	      .attr("height", function(d) { return xLen(d)});
+
+	  // circle sw
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[4]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+	  }
+	  }else if(params.ncol>1){
+	  // clipPath w
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", function(d) { return xLen(d) * (-1)})
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", function(d) { return xLen(d) * (-1)})
+	      .attr("height", function(d) { return xLen(d) * 2});
+
+	  // circle w
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[0]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+		
+	  // clipPath e
+	  circle.append("clipPath")
+	      .attr('id', function(d) { return "clipse" + d.index })
+	      .append('rect')
+	      .attr("x", 0)
+	      .attr("width", function(d) { return xLen(d)})
+	      .attr("y", function(d) { return xLen(d) * (-1)})
+	      .attr("height", function(d) { return xLen(d) * 2});
+
+	  // circle e
+	  circle.append('path')
+		  .attr("d", d3.svg.symbol()
+		    .type(function(d) { return xSymbol(d)})
+		    .size(function(d) { return nodeRadius*nodeRadius*4 }))
+		  .attr("clip-path", function(d) { return "url(#clipse" + d.index + ")"})
+		  .attr('fill', function(d) { return color(d.heat[1]); })
+		  .style('opacity', function(d) {return fillopacity(d, params.index);});
+	  }
+
+	  circle.append('text')
+		  .attr('x', nodeRadius)
+		  .attr('y', '.31em')
+		  .style('fill', fontColor)
+		  .style('font-size', fontSize)
+		  .text(function(d) { return d.name; });
+
+	  // Make sure nodes don't go outside the borders of the SVG
+	  force.on('tick', function() {
+		circle.attr('transform', function(d) {
+		  d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x));
+		  d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y));
+		  return 'translate(' + d.x + ',' + d.y + ')';
+		});
+
+		networks.forEach(function(net, i) {
+		  var offset = edgeWidth * (i = numNets / 2);
+		  linkInNetwork[net]
+			  .attr('x1', function(d) { return d.source.x + offset; })
+			  .attr('y1', function(d) { return d.source.y + offset; })
+			  .attr('x2', function(d) { return d.target.x + offset; })
+			  .attr('y2', function(d) { return d.target.y + offset; });
+		});
+	  }); // end force
+
+	  //////////////////////////////////////////////////////////////////////////
+	  // DRAW LEGENDS
+	  function renderNetworkLegend() {
+		var netLegend = fig.selectAll(".net-group")
+			.data(networks).enter()
+			.append("g")
+				.style("font-size", 12)
+				.on("click", function(n){
+					var active = activeNetworks[n];
+					activeNetworks[n] = !active;
+					linkInNetwork[n].transition().duration(transitionTime)
+						.style("stroke-opacity", active ? 0 : 1);
+
+					d3.select(this).transition().duration(transitionTime)
+						.style("stroke-opacity", active ? 0.5 : 1)
+						.style("fill-opacity", active ? 0.5 : 1);
+				});
+
+		netLegend.append("line")
+			.attr("x1", 0)
+			.attr("x2", netLegendBox)
+			.style("stroke-width", edgeWidth)
+			.style("stroke", function(n){ return colorSchemes.network[n]; });
+
+		netLegend.append("text")
+			.attr("x", 8 + netLegendBox)
+			.attr("y", 3)
+			.text(function(n){ return n; });
+
+		netLegend.attr("transform", function(d, i){
+			return "translate(" + (width-d3.select(this).node().getBBox().width) + "," + ((i+1)*netLegendBox) + ")";
+		})
+
+	  } // end renderNetworkLegend()
+
+	  function renderGradientLegend() {
+		var heatLegend = selection.append('div')
+			.attr('id', 'subnetwork-legend')
+			.style('width', heatLegendWidth + 'px');
+
+		var gradient = heatLegend.append('svg')
+			.attr('width', heatLegendWidth)
+			.attr('height', heatLegendHeight);
+
+		// Create a unique ID for the heat gradient
+		var gradientID = 'heat_gradient' + Date.now();
+		gradient.append('svg:defs')
+			.append('svg:linearGradient')
+			  .attr('x1', '0%')
+			  .attr('y1', '0%')
+			  .attr('x2', '100%')
+			  .attr('y2', '0%')
+			  .attr('id', gradientID)
+			  .call(function (gradient) {
+				gradient.append('svg:stop')
+				  .attr('offset', '0%')
+				  .attr('style', 'stop-color:' + cold + ';stop-opacity:1');
+				gradient.append('svg:stop')
+				  .attr('offset', '50%')
+				  .attr('style', 'stop-color:#fff;stop-opacity:1');
+				gradient.append('svg:stop')
+				  .attr('offset', '100%')
+				  .attr('style', 'stop-color:' + hot + ';stop-opacity:1');
+			  });
+
+		gradient.append('rect')
+			.attr('width', heatLegendWidth)
+			.attr('height', heatLegendHeight)
+			.style('fill', 'url(#' + gradientID + ')');
+
+		var labels = heatLegend.append('div')
+			.style('clear', 'both');
+		var format = d3.format("g");
+		
+		heatLegend.append('span')
+		  .style('float', 'left')
+		  .text(heatFormat(d3.min(heatRange)));
+
+		heatLegend.append('span')
+		  .style('float', 'right')
+		  .text(heatFormat(d3.max(heatRange)));
+		  
+	  } // end renderGradientLegend()
+
+	  if(showNetworkLegend) {
+		renderNetworkLegend();
+	  }
+	  if(showGradientLegend) {
+		renderGradientLegend();
+	  }
+	  
+	  //////////////////////////////////////////////////////////////////////////
+	  // UTILITY FUNCTIONS
+	  // Returns list of links between a given set of nodes and an edge list
+	  function loadLinks(edges, nodes) {
+		var links = [];
+
+		for (var i = 0; i < nodes.length; i++) {
+		  var u = nodes[i].name;
+		  for(var j = 0; j < nodes.length; j++) {
+			var v = nodes[j].name;
+			for (var k = 0; k < edges.length; k++) {
+			  var src = edges[k].source,
+				  tgt = edges[k].target;
+			  if ( (u == src && v == tgt) || (u == tgt && v == src) ) {
+				links.push({
+				  'source': nodes[i],
+				  'target': nodes[j],
+				  'weight': edges[k].weight,
+				  'networks': edges[k].networks
+				})
+			  }
+			}
+		  }
+		}
+
+		return links;
+	  } // end loadLinks()
+	});
+  } // end chart()
+
+
+  chart.addNetworkLegend = function () {
+	showNetworkLegend = true;
+	return chart;
+  }
+
+  chart.addGradientLegend = function () {
+	showGradientLegend = true;
+	return chart;
+  }
+
+  return chart;
+}
+</script>
+<style>
+        
+        /* jssor slider bullet navigator skin 05 css */
+        /*
+        .jssorb05 div           (normal)
+        .jssorb05 div:hover     (normal mouseover)
+        .jssorb05 .av           (active)
+        .jssorb05 .av:hover     (active mouseover)
+        .jssorb05 .dn           (mousedown)
+        */
+        .jssorb05 {
+            position: absolute;
+        }
+        .jssorb05 div, .jssorb05 div:hover, .jssorb05 .av {
+            position: absolute;
+            /* size of bullet elment */
+            width: 16px;
+            height: 16px;
+            background: url('img/b05.png') no-repeat;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .jssorb05 div { background-position: -7px -7px; }
+        .jssorb05 div:hover, .jssorb05 .av:hover { background-position: -37px -7px; }
+        .jssorb05 .av { background-position: -67px -7px; }
+        .jssorb05 .dn, .jssorb05 .dn:hover { background-position: -97px -7px; }
+
+        /* jssor slider arrow navigator skin 12 css */
+        /*
+        .jssora12l                  (normal)
+        .jssora12r                  (normal)
+        .jssora12l:hover            (normal mouseover)
+        .jssora12r:hover            (normal mouseover)
+        .jssora12l.jssora12ldn      (mousedown)
+        .jssora12r.jssora12rdn      (mousedown)
+        */
+        .jssora12l, .jssora12r {
+            display: block;
+            position: absolute;
+            /* size of arrow element */
+            width: 30px;
+            height: 46px;
+            cursor: pointer;
+            background: url('img/a12.png') no-repeat;
+            overflow: hidden;
+        }
+        .jssora12l { background-position: -16px -37px; }
+        .jssora12r { background-position: -75px -37px; }
+        .jssora12l:hover { background-position: -136px -37px; }
+        .jssora12r:hover { background-position: -195px -37px; }
+        .jssora12l.jssora12ldn { background-position: -256px -37px; }
+        .jssora12r.jssora12rdn { background-position: -315px -37px; }
+    </style>
+
+
